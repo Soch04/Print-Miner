@@ -12,9 +12,8 @@ Author:
     Sonya C
 
 Date:
-    2/26/2024
+    4/02/2024
 """
-
 from typing import Final 
 import os
 import discord

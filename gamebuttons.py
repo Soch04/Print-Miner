@@ -10,32 +10,28 @@ Author:
     Sonya C
 
 Date:
-    2/26/2024
+    4/02/2024
 """
-
-
 import discord
-from printminer import LoadButtons, PrintMiner
+from printminer import MenuButtons
 
 async def load_game(interaction: discord.Interaction):
-    miner = PrintMiner.setup_miner()
     embed = discord.Embed(
         title = "Ready to mine?",
     )
 
-    view = LoadGameButtons(miner)
+    view = LoadGameButtons()
     await interaction.response.send_message(embed = embed, view = view)
 
 class LoadGameButtons(discord.ui.View):
-    def __init__(self,miner):
+    def __init__(self):
         super().__init__(timeout = None)
-        self.miner = miner
 
     @discord.ui.button(label = "Start",
                        style = discord.ButtonStyle.success)
     async def start_mine(self, interaction: discord.Interaction, button:discord.ui.Button):
         await interaction.response.defer()
-        view = LoadButtons(self.miner)
+        view = MenuButtons()
         await interaction.edit_original_response(
             embed = discord.Embed(
                 title = "Welcome!"
