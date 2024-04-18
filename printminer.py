@@ -12,7 +12,7 @@ Author:
     Sonya C
 
 Date updated:
-    4/02/2024
+    4/18/2024
 """
 
 import discord
@@ -23,7 +23,6 @@ from gameobjects import Miner, Shop, Enemy, Minerals
 
 class DisplayCode(enum.IntEnum):
     """ Enum class to represent different Print Miner response types through Discord."""
-
     LEVEL_UP = 0
 
     MINING_START = 1
@@ -53,6 +52,9 @@ class DisplayCode(enum.IntEnum):
     CANCEL = 22 
     ABORT = 23
 
+class final(enum.IntEnum):
+    BUTTON_TIMEOUT = 5 #seconds
+
 class LoadDisplays():
     """ Handles the display of interactions, fights, miner stats, and shop transactions."""
     async def display_mining_progress(interaction: discord.Interaction, miner: Miner, mineral: Minerals, progress_bar: str, display_code: DisplayCode) -> None:
@@ -67,19 +69,10 @@ class LoadDisplays():
             display_code (DisplayCode): The code indicating the specific display to be shown.
         """
         if (display_code == DisplayCode.MINING):
-            view = CancelButton(mineral)
             await interaction.edit_original_response(embed = discord.Embed(
                 title = f"Mining {mineral.name} | Gold : {miner.gold_found}",
-                description = f"```css\n chunks remaining : {mineral.size} \n {progress_bar}\n experience : {miner.experience}```"
-                ), view = view
-            )
-
-        elif (display_code == DisplayCode.MINING_GOLD):
-            view = CancelButton(mineral)
-            await interaction.edit_original_response(embed = discord.Embed(
-                    title = f"Mining {mineral.name} | Gold : {miner.gold_found}",
-                    description = f"```css\n chunks remaining : {mineral.size} \n {progress_bar} \n experience:  {miner.experience}```"
-                ), view = view
+                description = f"```css\n chunks remaining : {mineral.size} \n {progress_bar}\n Miner Lvl : {miner.level}```"
+                ), view = None
             )
 
     async def display_interaction(interaction: discord.Interaction, miner: Miner, mineral: Minerals, display_code: DisplayCode) -> None:
@@ -99,6 +92,7 @@ class LoadDisplays():
                 ), view = view
             )
 
+        # TODO may be removed
         elif (display_code == DisplayCode.MINING_CANCELLED):
             view = MenuButtons()
             await interaction.edit_original_response(embed = discord.Embed(
@@ -145,24 +139,16 @@ class LoadDisplays():
             )
         
         elif (display_code == DisplayCode.FIGHT_MINER_ATTACK):
-            if enemy.max_health <= 0: # Adresses a case where the Miner attempts to flee after they die or kill an enemy.
-                view = None # Excludes flee button in response.
-            else:
-                view = FleeButton(enemy)
             await interaction.edit_original_response(embed = discord.Embed(
                     title = f"You dealt {miner.weapon.damage} to {enemy.name}",
                     description = f"\nYour health : {miner.health} \ {miner.max_health}\n {enemy.name} health : {enemy.max_health}"
-                ), view = view
+                ), view = None
             )
         elif (display_code == DisplayCode.FIGHT_ENEMY_ATTACK):
-            if enemy.max_health <= 0:
-                view = None
-            else:
-                view = FleeButton(enemy)
             await interaction.edit_original_response(embed = discord.Embed(
                     title = f"{enemy.name} attacked you with {enemy.damage} damage",
                     description = f"\nYour health : {miner.health} \ {miner.max_health}\n {enemy.name} health : {enemy.max_health}"
-                ), view = view
+                ), view = None
             )
         elif (display_code == DisplayCode.FIGHT_WIN):
             view = MenuButtons()
@@ -226,7 +212,8 @@ class LoadDisplays():
                                     f"\n {miner.tool.name} : {miner.tool.mining_power} mp" +
                                     f"\n {miner.weapon.name} : {miner.weapon.damage} dmg" +
                                     f"\n Credits : {miner.gold_credits}" +
-                                    f"\n Experience : {miner.experience}" 
+                                    f"\n Experience : {miner.experience}" +
+                                    f"\n Level : {miner.level}"
                 ), view = view
             )
 
@@ -243,6 +230,13 @@ class LoadDisplays():
                     description = f"All stats have been deleted"
                 ), view = None
             )
+
+    async def display_timeout(interaction: discord.Interaction) -> None:
+            await interaction.edit_original_response(embed = discord.Embed(
+                title = f"TIMEOUT!",
+                description = f"All stats have been deleted"
+            ), view = None
+        )
 
     async def display_shop(interaction: discord.Interaction, miner: Miner, shop: Shop, display_code: DisplayCode) -> None:
         """
@@ -300,10 +294,13 @@ class LoadDisplays():
 class MenuButtons(discord.ui.View):
     """Includes buttons for mining, shopping, viewing stats, and aborting the game."""
     def __init__(self):
-        super().__init__(timeout = None)
+        super().__init__(timeout = final.BUTTON_TIMEOUT)
         self.miner = Miner()
         self.shop = Shop()
         self.miner.game_over = False 
+        
+    async def on_timeout(self) -> None:
+        pass
 
     @discord.ui.button(label="Mine", style=discord.ButtonStyle.success)
     async def start_mine(self, interaction: discord.Interaction, button:discord.ui.Button) -> None:
@@ -324,18 +321,17 @@ class MenuButtons(discord.ui.View):
 
     @discord.ui.button(label="Abort", 
                        style=discord.ButtonStyle.red)
-    async def cancel_mine(self, interaction: discord.Interaction, button:discord.ui.Button) -> None:
+    async def abort(self, interaction: discord.Interaction, button:discord.ui.Button) -> None:
         await interaction.response.defer()
-        await interaction.edit_original_response(
-            embed = discord.Embed(
-                title = "YOU HAVE LEFT",
-            ), view = None
-        )
+        self.miner.reset() # Reset the miner stats
+        self.shop.reset()
+        await LoadDisplays.display_miner(interaction, self.miner, DisplayCode.ABORT)
+
 
 class ShopButtons(discord.ui.View):
     """Includes buttons for returning to the main menu, buying health, weapons, and tools."""
     def __init__(self):
-        super().__init__(timeout = None)
+        super().__init__(timeout = final.BUTTON_TIMEOUT)
         self.miner = Miner()
         self.shop = Shop()
 
@@ -360,7 +356,6 @@ class ShopButtons(discord.ui.View):
         else:
             await LoadDisplays.display_shop(interaction, self.miner, self.shop, DisplayCode.UNAVAILABLE)
 
-
     @discord.ui.button(label = "Buy Weapon",
                        style = discord.ButtonStyle.blurple)
     async def buy_weapon(self, interaction: discord.Interaction, button:discord.ui.Button) -> None:
@@ -382,9 +377,9 @@ class ShopButtons(discord.ui.View):
             await LoadDisplays.display_shop(interaction, self.miner, self.shop, DisplayCode.UNAVAILABLE)
 
 class CancelButton(discord.ui.View):
-    """Button allows the user to cancel mining upon interaction."""
+    """Button allows the user to cancel mining operation before it starts."""
     def __init__(self, mineral: Minerals):
-        super().__init__(timeout = None)
+        super().__init__(timeout = final.BUTTON_TIMEOUT)
         self.miner = Miner()
         self.mineral = mineral
 
@@ -408,24 +403,10 @@ class ShopBackButton(discord.ui.View):
         await interaction.response.defer()
         await LoadDisplays.display_shop(interaction, self.miner, self.shop, DisplayCode.SHOP)
 
-class FleeButton(discord.ui.View):
-    """Button which llows the user to flee during a battle."""
-    def __init__(self, enemy):
-        super().__init__(timeout = None)
-        self.miner = Miner()
-        self.enemy = enemy
-
-    @discord.ui.button(label = "Flee",
-                       style = discord.ButtonStyle.success)
-    async def flee(self, interaction: discord.Interaction, button:discord.ui.Button)  -> None:
-        await interaction.response.defer()
-        self.miner.game_over = True
-        await PrintMiner.miner_flee(interaction, self.miner, self.enemy) 
- 
 class FightButtons(discord.ui.View):
     """Includes buttons for fleeing and attacking when the user encounters an enemy."""
     def __init__(self, enemy: Enemy):
-        super().__init__(timeout = None)
+        super().__init__(timeout = final.BUTTON_TIMEOUT)
         self.miner = Miner()
         self.enemy = enemy
 
@@ -441,12 +422,12 @@ class FightButtons(discord.ui.View):
         await interaction.response.defer()
         await PrintMiner.enemy_attack(interaction, self.miner, self.enemy) # begins fight 
 
-
 class GameOverButtons(discord.ui.View):
     """Includes buttons for viewing stats and aborting the game. Should be called when the Miner dies."""
     def __init__(self):
-        super().__init__(timeout = None)
+        super().__init__(timeout = final.BUTTON_TIMEOUT)
         self.miner = Miner()
+        self.shop = Shop()
 
     @discord.ui.button(label="Stats", style=discord.ButtonStyle.gray)
     async def stats(self, interaction: discord.Interaction, button:discord.ui.Button) -> None:
@@ -457,6 +438,7 @@ class GameOverButtons(discord.ui.View):
     async def cancel_mine(self, interaction: discord.Interaction, button:discord.ui.Button) -> None:
         await interaction.response.defer()
         self.miner.reset() # Reset the miner stats
+        self.shop.reset() 
         await LoadDisplays.display_miner(interaction, self.miner, DisplayCode.ABORT)
 
 
@@ -471,13 +453,18 @@ class PrintMiner:
     
     @staticmethod
     async def mine(interaction : discord.Interaction, miner:Miner) -> None:
-        """_summary_
+        """
+        This function simulates the mining process in the game. It randomly selects a mineral type and size. 
+        Then it initiates a mining process where the miner extracts chunks of the mineral until depleted.
+        During the mining process, a progress bar is displayed to show the mining progress. The miner may also find gold (credits) during mining.
+        After the mining process, there's a chance that an enemy encounter will be initiated.
 
         Args:
-            interaction (discord.Interaction): _description_
-            miner (Miner): _description_
+            interaction (discord.Interaction): The interaction object that represents a user's interaction (like a command invocation) with the bot.
+            miner (Miner): The miner object that will perform the mining.
         """
 
+        # Setting up variables
         mineral_type: Minerals = random.choice(Minerals.__subclasses__())()
         mineral_size: int = random.randint(mineral_type.get_lower_bound(mineral_type.size), mineral_type.size)
         mineral_gold: int = random.randint(mineral_type.get_lower_bound(mineral_type.gold), mineral_type.gold) * miner.tool.mining_power
@@ -488,7 +475,7 @@ class PrintMiner:
 
         """ Creating a string progress bar. 
             progress_bar_length of the progress bar is equivalent to the size of the mineral
-            progress_bar_current represents the current location of the filled portion of the progress bar.
+            progress_bar_current represents the current length of the filled portion of the progress bar.
             progress_bar[0] returns the string state of the progress bar
 
             The progress bar is based on the chunk count. 
@@ -506,26 +493,23 @@ class PrintMiner:
         await asyncio.sleep(.5)
 
         for chunk in chunk_count:
-            if miner.game_over == False: # The cancel button in display_mining_progress may set game_over to true
-                mineral_type.size = chunk # Updating display of mineral size
-                progress_bar_current = chunk
-                progress_bar = progressBar.filledBar(progress_bar_length, progress_bar_current, 15, progress_bar_slider, progress_bar_line)
-                await LoadDisplays.display_mining_progress(interaction, miner, mineral_type, progress_bar[0], DisplayCode.MINING) 
+            mineral_type.size = chunk # Updating display of mineral size
+            progress_bar_current = chunk
+            progress_bar = progressBar.filledBar(progress_bar_length, progress_bar_current, 15, progress_bar_slider, progress_bar_line)
+            await LoadDisplays.display_mining_progress(interaction, miner, mineral_type, progress_bar[0], DisplayCode.MINING) 
 
-                # Display gold found
-                if random.random() < .60 and miner.game_over == False: # 60% chance of gold
-                    print("DEBUG: adding gold...")
-                    miner.gold_credits += mineral_gold
-                    mineral_gold_count += 1
-                    progress_bar = progressBar.filledBar(progress_bar_length, progress_bar_current, 15, progress_bar_slider, progress_bar_line) 
+            # Display gold found
+            if random.random() < .60: # 60% chance of gold
+                print("DEBUG: adding gold...")
+                miner.gold_credits += mineral_gold
+                mineral_gold_count += 1
 
-                miner.gold_found = mineral_gold_count * mineral_gold # Calculate the amount of gold found in mineral.
-                miner.experience += mineral_experience
-                if miner.level_up(): # checks if miner can level up and displays level up message.
-                    LoadDisplays.display_miner(interaction, miner, DisplayCode.LEVEL_UP)
+            miner.gold_found = mineral_gold_count * mineral_gold # Calculate the amount of gold found in mineral.
+            miner.experience += mineral_experience
 
-            else:
-                break
+        if miner.level_up(): # checks if miner can level up and displays level up message.
+            await LoadDisplays.display_miner(interaction, miner, DisplayCode.LEVEL_UP)
+            await asyncio.sleep(1)
 
         # Initiate and display encounter after mining mineral.
         if random.random() < .50 and miner.game_over == False: # 50% chance of enemy
@@ -539,6 +523,7 @@ class PrintMiner:
             await LoadDisplays.display_interaction(interaction, miner, mineral_type, DisplayCode.MINING_CONTINUE)
             print("DEBUG: continue mine")
 
+
     async def enemy_attack(interaction: discord.Interaction, miner: Miner, enemy: Enemy) -> None:
         enemy.max_health = random.randint(enemy.get_lower_bound(enemy.max_health), enemy.max_health)
         turn: int = random.randint(0,1)
@@ -547,7 +532,7 @@ class PrintMiner:
             print("DEBUG: in fight loop")
 
             # display_fight may set game_over into true in order to stop this loop, signifying that the Miner has fled. 
-            if (turn == 0) and (miner.game_over == False): # Enemy attack
+            if (turn == 0): # Enemy attack
                 enemy.damage = random.randint(enemy.get_lower_bound(enemy.damage), enemy.damage)
                 miner.lose_health(enemy.damage)
 
@@ -557,7 +542,7 @@ class PrintMiner:
                 print("DEBUG: enemy turn")
                 turn += 1
 
-            elif (turn == 1) and (miner.game_over == False): # Miner turn   
+            elif (turn == 1): # Miner turn   
                 miner_damage = random.randint(miner.weapon.get_lower_bound(miner.weapon.damage), miner.weapon.damage)  
                 enemy.lose_health(miner_damage) # TODO not setting health to 0 when negative
 
@@ -567,21 +552,17 @@ class PrintMiner:
                 print("DEBUG: player turn")
                 turn -= 1 
 
-            else:
-                break
+        print("DEBUG: Leave fight loop")
+        if (enemy.max_health <= 0): 
+            await asyncio.sleep(1)
+            await LoadDisplays.display_fight(interaction, miner, enemy, DisplayCode.FIGHT_WIN)
+            print("DEBUG: player win")
 
-            if miner.game_over == False: # The Miner breaks the loop when they flee. This check ensures no unecessary calculations continue.
-                print("DEBUG: Leave fight loop")
-                if (enemy.max_health <= 0): # TODO lose_health not setting health to 0 when negative
-                    await asyncio.sleep(1)
-                    await LoadDisplays.display_fight(interaction, miner, enemy, DisplayCode.FIGHT_WIN)
-                    print("DEBUG: player win")
-
-                elif (miner.health == 0):
-                    await asyncio.sleep(1)
-                    await LoadDisplays.display_fight(interaction, miner, enemy, DisplayCode.FIGHT_LOST)
-                    miner.game_over = True
-                    print("DEBUG: player lost")
+        elif (miner.health <= 0):
+            await asyncio.sleep(1)
+            await LoadDisplays.display_fight(interaction, miner, enemy, DisplayCode.FIGHT_LOST)
+            miner.game_over = True
+            print("DEBUG: player lost")
 
     # When the miner flees, there is a chance to lose a radom amount of credits.
     async def miner_flee(interaction: discord.Interaction, miner: Miner, enemy: Enemy) -> None: 

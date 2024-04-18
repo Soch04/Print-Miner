@@ -275,7 +275,14 @@ class Shop(metaclass=Singleton):
         self.weapons: list = [HammerII(),UltraHam()]
         self.current_tool: Tool = self.tools[0]
         self.current_weapon: Weapon = self.weapons[0]
-
+        
+    def reset(self):
+        """Resets all attributes of the Miner once the user aborts the game."""
+        self.tools: list = [PickaxeII(), UltraPick()]
+        self.weapons: list = [HammerII(),UltraHam()]
+        self.current_tool: Tool = self.tools[0]
+        self.current_weapon: Weapon = self.weapons[0]
+        
     def get_health_price(miner:Miner) -> int:
         return (miner.max_health - miner.health) * 10 
 
