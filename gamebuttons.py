@@ -2,18 +2,19 @@
 Print Miner Discord Bot Game - Game Loader
 
 This Python script contains the code for loading the Print Miner game on Discord. 
-It includes the `load_game` function to set up the game and the `LoadGameButtons` class to handle the game's interactive buttons.
-
-The script uses the discord.py library to interact with Discord's API and asyncio for asynchronous tasks.
+It includes the `load_game` function to set up the game 
+and the `LoadGameButtons` class to handle the game's interactive buttons.
 
 Author:
     Sonya C
 
-Date:
+Date updated:
     4/02/2024
 """
-import discord
+
+
 from printminer import MenuButtons
+import discord
 
 async def load_game(interaction: discord.Interaction):
     embed = discord.Embed(
@@ -35,7 +36,7 @@ class LoadGameButtons(discord.ui.View):
         await interaction.edit_original_response(
             embed = discord.Embed(
                 title = "Welcome!"
-            ) ,view = view 
+            ) ,view = view
         )
 
     @discord.ui.button(label = "Cancel",
@@ -44,7 +45,6 @@ class LoadGameButtons(discord.ui.View):
         await interaction.response.defer()
         await interaction.edit_original_response(
             embed = discord.Embed(
-                title = "mining cancelled"
+                title = "*mining cancelled*"
             ) ,view = None # removes buttons
         )
-
